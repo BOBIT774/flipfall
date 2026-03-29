@@ -1,0 +1,2085 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>FlipFall</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100dvh;
+    overflow: hidden;
+    font-family: 'Share Tech Mono', monospace;
+    touch-action: none;
+    user-select: none;
+  }
+
+  #game-wrapper {
+    position: relative;
+    width: min(430px, 100vw);
+    height: min(932px, 100dvh);
+    overflow: hidden;
+    background: #050510;
+  }
+
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+  }
+
+  /* UI Overlays */
+  .screen {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    transition: opacity 0.3s;
+  }
+  .screen.hidden { opacity: 0; pointer-events: none; }
+  .screen.visible { opacity: 1; pointer-events: all; }
+
+  /* HUD */
+  #hud {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    padding: 18px 24px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    pointer-events: none;
+    z-index: 10;
+  }
+  #score-display {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 28px;
+    font-weight: 700;
+    color: #fff;
+    text-shadow: 0 0 20px #00f0ff, 0 0 40px #00f0ff80;
+    letter-spacing: 2px;
+  }
+  #best-display {
+    font-size: 11px;
+    color: #ffffff60;
+    letter-spacing: 2px;
+    margin-top: 4px;
+    text-align: right;
+  }
+  #speed-bar-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+  }
+  #speed-label { font-size: 9px; color: #ff007780; letter-spacing: 3px; }
+  #speed-bar-bg {
+    width: 80px; height: 4px;
+    background: #ffffff15;
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  #speed-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #00f0ff, #ff0077);
+    border-radius: 2px;
+    width: 0%;
+    transition: width 0.5s;
+    box-shadow: 0 0 8px #ff007780;
+  }
+
+  /* START SCREEN — transparent bg so canvas shows through */
+  #start-screen {
+    background: transparent;
+    z-index: 20;
+  }
+  .logo-wrap {
+    position: relative;
+    margin-bottom: 8px;
+  }
+  .logo {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 64px;
+    font-weight: 900;
+    letter-spacing: -2px;
+    background: linear-gradient(135deg, #00f0ff 0%, #ff0077 60%, #ffaa00 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    filter: drop-shadow(0 0 30px #00f0ff60);
+  }
+  .logo-sub {
+    font-size: 11px;
+    letter-spacing: 6px;
+    color: #ffffff50;
+    text-align: center;
+    margin-bottom: 60px;
+  }
+  .tap-prompt {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 13px;
+    letter-spacing: 4px;
+    color: #00f0ff;
+    text-shadow: 0 0 20px #00f0ff;
+    animation: pulse-fade 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse-fade {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.2; }
+  }
+  .start-hint {
+    position: absolute;
+    bottom: 60px;
+    font-size: 10px;
+    color: #ffffff30;
+    letter-spacing: 2px;
+    text-align: center;
+    line-height: 1.8;
+  }
+  .deco-lines {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 0;
+  }
+  .deco-lines::before, .deco-lines::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #00f0ff40, transparent);
+  }
+  .deco-lines::before { top: 30%; }
+  .deco-lines::after { bottom: 30%; }
+
+  /* DEATH SCREEN */
+  #death-screen {
+    background: #00000090;
+    z-index: 20;
+    backdrop-filter: blur(4px);
+  }
+  .death-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 42px;
+    font-weight: 900;
+    color: #ff0077;
+    text-shadow: 0 0 40px #ff007799;
+    letter-spacing: 4px;
+    margin-bottom: 4px;
+  }
+  .death-score {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 20px;
+    color: #fff;
+    margin-bottom: 8px;
+    letter-spacing: 2px;
+  }
+  .death-best {
+    font-size: 11px;
+    color: #ffaa00;
+    letter-spacing: 3px;
+    margin-bottom: 50px;
+    text-shadow: 0 0 10px #ffaa0080;
+  }
+  .restart-btn {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 14px;
+    letter-spacing: 4px;
+    color: #050510;
+    background: linear-gradient(135deg, #00f0ff, #0080ff);
+    border: none;
+    padding: 16px 40px;
+    border-radius: 4px;
+    cursor: pointer;
+    pointer-events: all;
+    box-shadow: 0 0 30px #00f0ff60;
+    transition: transform 0.1s, box-shadow 0.2s;
+  }
+  .restart-btn:active { transform: scale(0.96); box-shadow: 0 0 10px #00f0ff40; }
+
+  /* HEALTH BAR */
+  #health-bar-wrap {
+    position: absolute;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+    pointer-events: none;
+    z-index: 10;
+  }
+  #health-label {
+    font-size: 9px;
+    letter-spacing: 3px;
+    color: #ffffff50;
+  }
+  #health-bar-bg {
+    width: 160px;
+    height: 8px;
+    background: #ffffff15;
+    border-radius: 4px;
+    overflow: hidden;
+    box-shadow: 0 0 8px #00000080;
+  }
+  #health-bar-fill {
+    height: 100%;
+    width: 100%;
+    border-radius: 4px;
+    background: linear-gradient(90deg, #00dd66, #44ff88);
+    transition: width 0.15s, background 0.3s;
+    box-shadow: 0 0 8px #00dd6680;
+  }
+
+  /* CANVAS FLASH EFFECT */
+  #flash {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 15;
+    opacity: 0;
+    transition: opacity 0.05s;
+  }
+</style>
+</head>
+<body>
+<div id="game-wrapper">
+
+  <!-- Game canvas -->
+  <canvas id="canvas"></canvas>
+
+  <!-- Flash overlay -->
+  <div id="flash"></div>
+
+  <!-- HUD -->
+  <div id="hud">
+    <div>
+      <div id="score-display">0</div>
+    </div>
+    <div id="speed-bar-wrap">
+      <div id="best-display">BEST: 0</div>
+      <div id="speed-label">SPEED</div>
+      <div id="speed-bar-bg"><div id="speed-bar-fill"></div></div>
+    </div>
+  </div>
+
+  <!-- Health Bar -->
+  <div id="health-bar-wrap">
+    <div id="health-label">HULL</div>
+    <div id="health-bar-bg"><div id="health-bar-fill"></div></div>
+  </div>
+
+  <!-- Start Screen -->
+  <div id="start-screen" class="screen visible">
+    <div style="flex:1"></div>
+    <div style="flex:2"></div>
+    <button class="restart-btn" id="play-btn" style="margin-top:auto;margin-bottom:60px;background:linear-gradient(135deg,#00f0ff,#0055ff);box-shadow:0 0 30px #00f0ff80;letter-spacing:5px;font-size:15px;padding:18px 48px;">▶ PLAY</button>
+  </div>
+
+  <!-- Death Screen -->
+  <div id="death-screen" class="screen hidden">
+    <div class="death-title">DEAD</div>
+    <div class="death-score" id="death-score-val">0 m</div>
+    <div class="death-best" id="death-best-val"></div>
+    <button class="restart-btn" id="restart-btn">RETRY</button>
+  </div>
+
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+//  FLIPFALL — Core Game Engine
+// ─────────────────────────────────────────────
+
+const wrapper = document.getElementById('game-wrapper');
+const canvas  = document.getElementById('canvas');
+const ctx     = canvas.getContext('2d');
+
+// Screens & UI
+const startScreen  = document.getElementById('start-screen');
+const deathScreen  = document.getElementById('death-screen');
+const scoreDisplay = document.getElementById('score-display');
+const bestDisplay  = document.getElementById('best-display');
+const deathScore   = document.getElementById('death-score-val');
+const deathBest    = document.getElementById('death-best-val');
+const restartBtn   = document.getElementById('restart-btn');
+const flashEl      = document.getElementById('flash');
+const speedFill    = document.getElementById('speed-bar-fill');
+const healthFill   = document.getElementById('health-bar-fill');
+
+// ── Canvas sizing ──
+function resize() {
+  const rect = wrapper.getBoundingClientRect();
+  canvas.width  = rect.width;
+  canvas.height = rect.height;
+  W = canvas.width;
+  H = canvas.height;
+  CORRIDOR_TOP    = H * 0.15;
+  CORRIDOR_BOTTOM = H * 0.85;
+  CORRIDOR_H      = CORRIDOR_BOTTOM - CORRIDOR_TOP;
+}
+let W, H, CORRIDOR_TOP, CORRIDOR_BOTTOM, CORRIDOR_H;
+resize();
+window.addEventListener('resize', () => { resize(); if (gameState === 'playing') initLevel(); });
+
+// ── Game state ──
+let gameState = 'start'; // 'start' | 'playing' | 'dead'
+let bestScore = parseInt(localStorage.getItem('flipfall_best') || '0');
+bestDisplay.textContent = 'BEST: ' + bestScore;
+
+// ── Player ──
+const PLAYER_SIZE = 18;
+let player = {};
+
+// ── Physics constants ──
+const BASE_SPEED      = 160; // px/s forward speed
+const MAX_SPEED_BONUS = 180; // additional px/s at max
+const GRAVITY_FORCE   = 1200; // px/s²
+const MAX_FALL_SPEED  = 550;
+
+// ── Obstacle system ──
+let obstacles   = [];
+let particles   = [];
+let bgStars     = [];
+let score       = 0;
+let gameTime    = 0;
+let currentSpeed = BASE_SPEED;
+let lastTime    = 0;
+let animFrame   = null;
+
+// ── Obstacle templates ──
+// Each obstacle is an object:
+//   type: 'spike' | 'wall' | 'moving'
+//   x, y, w, h
+//   vy (for moving), phase (for oscillating)
+
+const SPAWN_MARGIN = 80; // right edge spawn offset
+
+// ─────────────────────────────────────────────
+//  INIT
+// ─────────────────────────────────────────────
+function initLevel(startX, startY) {
+  player = {
+    x: startX !== undefined ? startX : W * 0.15,
+    y: startY !== undefined ? startY : CORRIDOR_TOP + CORRIDOR_H * 0.5,
+    vy: 0,
+    gravDir: 1,          // 1 = down, -1 = up
+    w: PLAYER_SIZE,
+    h: PLAYER_SIZE,
+    trail: [],           // for motion trail
+    alive: true,
+    flipCooldown: 0,
+    nearDeathTimer: 0,
+    onWall: false,
+    hp: 100,          // health points
+    iframes: 0,       // invincibility frames after a hit (seconds)
+  };
+
+  obstacles   = [];
+  particles   = [];
+  score       = 0;
+  gameTime    = 0;
+  currentSpeed = BASE_SPEED;
+  obstacleQueue = [];
+
+  // Initial breathing room
+  spawnObstacleAt(W + 300);
+  spawnObstacleAt(W + 600);
+  spawnObstacleAt(W + 900);
+
+  // BG stars (generated once)
+  bgStars = Array.from({length: 60}, () => ({
+    x: Math.random() * W,
+    y: Math.random() * H,
+    r: Math.random() * 1.5 + 0.3,
+    spd: Math.random() * 0.4 + 0.1,
+  }));
+}
+
+// ─────────────────────────────────────────────
+//  OBSTACLE GENERATION
+//  Uses a shuffled rotation so every 4 spawns
+//  contains exactly one of each obstacle type.
+// ─────────────────────────────────────────────
+let obstacleQueue = [];
+
+function refillQueue() {
+  // One of each: top saw, bottom saw, spike wall, asteroid
+  const pool = ['saw_top', 'saw_bottom', 'wall', 'moving'];
+  // Fisher-Yates shuffle
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  obstacleQueue.push(...pool);
+}
+
+function spawnObstacleAt(xPos) {
+  const difficulty = Math.min(1, gameTime / 100);
+  if (obstacleQueue.length === 0) refillQueue();
+  const type = obstacleQueue.shift();
+
+  if      (type === 'saw_top')    spawnSpikes(xPos, 'top',    difficulty);
+  else if (type === 'saw_bottom') spawnSpikes(xPos, 'bottom', difficulty);
+  else if (type === 'wall')       spawnWall(xPos,             difficulty);
+  else                            spawnMoving(xPos,           difficulty);
+}
+
+function spawnSpikes(xPos, side, diff) {
+  const count   = Math.floor(1 + diff * 2) + (Math.random() < 0.25 ? 1 : 0);
+  const spikeW  = 20 + Math.random() * 10;
+  const spikeH  = 24 + diff * 16 + Math.random() * 14;
+  const spacing = spikeW + 4 + Math.random() * 8;
+
+  for (let i = 0; i < count; i++) {
+    const x = xPos + i * spacing;
+    obstacles.push({
+      type: 'spike',
+      side,
+      x,
+      y: side === 'top' ? CORRIDOR_TOP : CORRIDOR_BOTTOM - spikeH,
+      w: spikeW,
+      h: spikeH,
+      vy: 0,
+      phase: 0,
+    });
+  }
+}
+
+function spawnWall(xPos, diff) {
+  const minGap   = 155 - diff * 30;
+  const gap      = Math.max(125, minGap + Math.random() * 50);
+  // Keep gap well away from the very top/bottom so there's always a landing strip
+  const margin   = 35;
+  const gapStart = CORRIDOR_TOP + margin + Math.random() * (CORRIDOR_H - gap - margin * 2);
+
+  // Top wall segment
+  if (gapStart > CORRIDOR_TOP + 5) {
+    obstacles.push({
+      type: 'wall',
+      x: xPos,
+      y: CORRIDOR_TOP,
+      w: 28,
+      h: gapStart - CORRIDOR_TOP,
+      vy: 0, phase: 0,
+    });
+  }
+  // Bottom wall segment
+  const botY = gapStart + gap;
+  if (botY < CORRIDOR_BOTTOM - 5) {
+    obstacles.push({
+      type: 'wall',
+      x: xPos,
+      y: botY,
+      w: 28,
+      h: CORRIDOR_BOTTOM - botY,
+      vy: 0, phase: 0,
+    });
+  }
+}
+
+function spawnMoving(xPos, diff) {
+  const h = 24 + Math.random() * 20;
+  const yCenter = CORRIDOR_TOP + CORRIDOR_H * 0.2 + Math.random() * CORRIDOR_H * 0.6;
+  const speed   = 50 + diff * 100 + Math.random() * 40;
+  obstacles.push({
+    type: 'moving',
+    x: xPos,
+    y: yCenter,
+    w: 38 + Math.random() * 16,
+    h,
+    vy: speed * (Math.random() < 0.5 ? 1 : -1),
+    phase: Math.random() * Math.PI * 2,
+    amplitude: 55 + diff * 45,
+    originY: yCenter,
+  });
+}
+
+// ─────────────────────────────────────────────
+//  INPUT
+// ─────────────────────────────────────────────
+function handleTap(e) {
+  e.preventDefault();
+  if (gameState === 'start') return; // play button handles this
+  if (gameState === 'dead') return;
+  if (gameState === 'playing') flipGravity();
+}
+
+function flipGravity() {
+  if (!player.alive) return;
+  if (player.flipCooldown > 0) return;
+
+  player.gravDir *= -1;
+  player.vy = 0;
+  player.flipCooldown = 0.08;
+
+  spawnFlipParticles();
+  playFlipSound();
+}
+
+canvas.addEventListener('touchstart', handleTap, { passive: false });
+canvas.addEventListener('mousedown',  handleTap);
+restartBtn.addEventListener('click', () => { hideScreen(deathScreen); startGame(); });
+restartBtn.addEventListener('touchstart', (e) => { e.stopPropagation(); hideScreen(deathScreen); startGame(); });
+
+// Play button
+const playBtn = document.getElementById('play-btn');
+function onPlayBtn(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  if (MW.phase !== 'idle') return;
+  playBtn.style.display = 'none';
+  if (musicState === 'off') startMenuMusic();
+  startDotDrop();
+}
+playBtn.addEventListener('click',      onPlayBtn);
+playBtn.addEventListener('touchstart', onPlayBtn, { passive: false });
+
+// ═══════════════════════════════════════════════════════════════
+//  FLIPFALL AUDIO ENGINE  v4
+//
+//  Key: F minor.  BPM: 140 (pre-drop half-time feel, drop = full)
+//
+//  MENU  — smooth pad chord + slow legato synth melody, no drums
+//  GAME  — trap beat (808 kick, snare, rolling hats) + smooth
+//           sustained synth lead. Simple, clean, groovy.
+//  DROP  — GD-style: filter WHOOSH, beat gap, then full speed:
+//           kicks every beat, snares doubled, hats on every 16th,
+//           synth switches to fast up-down GD arpeggio pattern.
+//
+//  Respawn fix: musicState resets to 'off' on stopAllMusic so
+//  startGameMusic() always rebuilds the audio graph fresh.
+// ═══════════════════════════════════════════════════════════════
+
+let audioCtx   = null;
+let masterGain = null;
+let musicState = 'off';  // 'off' | 'menu' | 'game' | 'drop'
+
+// All mutable music handles — reset on every startGameMusic()
+let M = {
+  reverb: null, padOscs: [], padGain: null, menuMelGain: null,
+  menuMelTimeout: null, seqTimeout: null, busGain: null,
+  bassGain: null, leadGain: null, synthFilter: null, drumBus: null,
+  intenseActive: false, step: 0, phase: 'pre',
+};
+
+// ── F minor frequencies ──
+const Fm = {
+  F2:87.31,
+  F3:174.61, Ab3:207.65, C4:261.63, Eb4:311.13,
+  F4:349.23, Ab4:415.30, Bb4:466.16, C5:523.25,
+  Db5:554.37, Eb5:622.25, F5:698.46, Ab5:830.61,
+  C6:1046.5,
+};
+
+// ─────────────────────────────────────────────
+//  INIT
+// ─────────────────────────────────────────────
+function getAudio() {
+  if (!audioCtx) {
+    audioCtx   = new (window.AudioContext || window.webkitAudioContext)();
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = 0.80;
+    masterGain.connect(audioCtx.destination);
+    // Build shared reverb once
+    const len = audioCtx.sampleRate * 1.8;
+    const buf = audioCtx.createBuffer(2, len, audioCtx.sampleRate);
+    for (let c = 0; c < 2; c++) {
+      const d = buf.getChannelData(c);
+      for (let i = 0; i < len; i++)
+        d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
+    }
+    M.reverb = audioCtx.createConvolver();
+    M.reverb.buffer = buf;
+    const rvg = audioCtx.createGain(); rvg.gain.value = 0.15;
+    M.reverb.connect(rvg); rvg.connect(masterGain);
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+// ─────────────────────────────────────────────
+//  LOW-LEVEL PRIMITIVES
+// ─────────────────────────────────────────────
+function synthNote(freq, type, vol, atk, sus, rel, dest, when) {
+  const ac = audioCtx;
+  const o  = ac.createOscillator();
+  const g  = ac.createGain();
+  o.type = type;
+  o.frequency.value = freq;
+  g.gain.setValueAtTime(0.0001, when);
+  g.gain.linearRampToValueAtTime(vol, when + atk);
+  g.gain.setValueAtTime(vol, when + atk + sus);
+  g.gain.exponentialRampToValueAtTime(0.0001, when + atk + sus + rel);
+  o.connect(g); g.connect(dest);
+  o.start(when); o.stop(when + atk + sus + rel + 0.02);
+}
+
+// 3-voice detuned unison for fat synth lead
+function leadNote(freq, vol, atk, sus, rel, dest, when) {
+  [0, 5, -5].forEach(cents => {
+    const r = Math.pow(2, cents / 1200);
+    synthNote(freq * r, 'sawtooth', vol * 0.36, atk, sus, rel, dest, when);
+  });
+}
+
+function noiseBurst(hpFreq, vol, dur, dest, when) {
+  const ac  = audioCtx;
+  const len = Math.ceil(ac.sampleRate * dur);
+  const buf = ac.createBuffer(1, len, ac.sampleRate);
+  const d   = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  const src = ac.createBufferSource(); src.buffer = buf;
+  const hp  = ac.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = hpFreq;
+  const g   = ac.createGain();
+  g.gain.setValueAtTime(vol, when);
+  g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+  src.connect(hp); hp.connect(g); g.connect(dest);
+  src.start(when); src.stop(when + dur + 0.01);
+}
+
+function kick(dest, when) {
+  const ac = audioCtx;
+  const o  = ac.createOscillator(); o.type = 'sine';
+  const g  = ac.createGain();
+  o.frequency.setValueAtTime(160, when);
+  o.frequency.exponentialRampToValueAtTime(40, when + 0.22);
+  g.gain.setValueAtTime(0.0001, when);
+  g.gain.linearRampToValueAtTime(1.0, when + 0.004);
+  g.gain.exponentialRampToValueAtTime(0.0001, when + 0.45);
+  o.connect(g); g.connect(dest);
+  o.start(when); o.stop(when + 0.48);
+  noiseBurst(1800, 0.18, 0.02, dest, when); // click
+}
+
+function snare(dest, when) {
+  noiseBurst(1000, 0.30, 0.16, dest, when);
+  synthNote(185, 'triangle', 0.15, 0.003, 0.035, 0.07, dest, when);
+}
+
+function hat(dest, when, vol) {
+  noiseBurst(8500, vol, 0.04, dest, when);
+}
+
+// ─────────────────────────────────────────────
+//  MENU — pad + slow melody
+// ─────────────────────────────────────────────
+function startMenuMusic() {
+  if (musicState === 'menu') return;
+  stopAllMusic();
+  musicState = 'menu';
+  const ac = getAudio();
+
+  // Pad: Fm add9 chord, detuned saws → lowpass → reverb
+  const lpf = ac.createBiquadFilter();
+  lpf.type = 'lowpass'; lpf.frequency.value = 750; lpf.Q.value = 1.0;
+  M.padGain = ac.createGain(); M.padGain.gain.value = 0;
+  M.padGain.connect(lpf); lpf.connect(masterGain); lpf.connect(M.reverb);
+
+  M.padOscs = [Fm.F3, Fm.C4, Fm.Ab4, Fm.Eb5].map((f, i) => {
+    const o = ac.createOscillator(); const g = ac.createGain();
+    o.type = 'sawtooth';
+    o.frequency.value = f * (1 + (i % 2 === 0 ? 0.005 : -0.005));
+    g.gain.value = 0.08;
+    o.connect(g); g.connect(M.padGain); o.start();
+    return { osc: o, gain: g };
+  });
+  M.padGain.gain.linearRampToValueAtTime(0.70, ac.currentTime + 1.0);
+
+  // Slow smooth melody — triangle, half-notes at 70 BPM
+  const melG = ac.createGain(); melG.gain.value = 0;
+  M.menuMelGain = melG;
+  const mf = ac.createBiquadFilter(); mf.type = 'lowpass'; mf.frequency.value = 4000;
+  melG.connect(mf); mf.connect(masterGain); mf.connect(M.reverb);
+  melG.gain.linearRampToValueAtTime(0.80, ac.currentTime + 1.0);
+
+  const MEL  = [Fm.F4, Fm.C5, Fm.Ab4, Fm.Eb5, Fm.C5, Fm.Ab4, Fm.F4, Fm.Eb4];
+  const DUR  = 60 / 70;
+  let idx = 0;
+
+  function tickMel() {
+    if (musicState !== 'menu') return;
+    const t = audioCtx.currentTime;
+    synthNote(MEL[idx % MEL.length], 'triangle', 0.25, 0.03, DUR * 0.65, DUR * 0.45, melG, t);
+    idx++;
+    M.menuMelTimeout = setTimeout(tickMel, DUR * 1000);
+  }
+  setTimeout(tickMel, 50);
+}
+
+// ─────────────────────────────────────────────
+//  GAME — trap beat + smooth synth lead
+//  16-step sequencer at 140 BPM (16th notes)
+//  PRE-DROP: half-time kick/snare, rolling trap hats, long lead
+//  DROP:     full kick every beat, doubled snare, 16th hats,
+//             fast GD-style up-down synth arpeggio
+// ─────────────────────────────────────────────
+
+// ── PRE-DROP: clean half-time trap ──
+// Kick on 1 and 9 (beats 1 and 3 of the bar)
+const P_KICK  = [1,0,0,0, 0,0,0,0, 0,1,0,0, 0,0,0,0];
+// Snare on 5 and 13 (beats 2 and 4)
+const P_SNARE = [0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,0];
+// Classic trap hi-hat roll: strong 8ths, triplet ghost rolls
+const P_HAT   = [1,0,1,1, 0,1,1,0, 1,0,1,1, 0,1,0,1];
+const P_OPEN  = [0,0,0,0, 0,0,0,1, 0,0,0,0, 0,0,1,0];
+// Smooth sustained lead — one note per 4 steps (quarter notes), long sustain
+const P_LEAD  = [Fm.F4, 0,0,0, Fm.C5,0,0,0, Fm.Ab4,0,0,0, Fm.Eb5,0,0,0];
+// 808 bass — root on 1, walk on off-steps
+const P_BASS  = [Fm.F2,0,0,Fm.F2, 0,Fm.C4,0,0, Fm.F2,0,0,0, Fm.C4,0,Fm.Ab3,0];
+
+// ── DROP: full double-time energy ──
+// Kick on every beat (steps 0,4,8,12) + extra on 10
+const D_KICK  = [1,0,0,0, 1,0,0,0, 1,0,1,0, 1,0,0,0];
+// Snare on 2&4 + ghost on offbeats
+const D_SNARE = [0,0,1,0, 1,0,0,1, 0,0,1,0, 1,0,0,0];
+// Hats on every 16th — full GD energy
+const D_HAT   = [1,1,1,1, 1,1,1,1, 1,1,1,1, 1,1,1,1];
+const D_OPEN  = [0,0,0,0, 0,0,1,0, 0,0,0,0, 0,1,0,0];
+// Fast GD-style up-down arpeggio — bounces between high and low
+const D_LEAD  = [
+  Fm.F5, Fm.C5, Fm.Ab5,Fm.F5,
+  Fm.Eb5,Fm.C5, Fm.F5, Fm.Ab5,
+  Fm.C6, Fm.Ab5,Fm.F5, Fm.Eb5,
+  Fm.C5, Fm.F5, Fm.Ab5,Fm.C6,
+];
+const D_BASS  = [Fm.F2,0,Fm.F2,Fm.F2, Fm.C4,0,Fm.F2,0, Fm.F2,Fm.F2,0,Fm.Ab3, Fm.C4,0,Fm.F2,0];
+
+function startGameMusic() {
+  // Clear any running sequencer without nuking the audio graph
+  clearTimeout(M.seqTimeout);
+  M.seqTimeout    = null;
+  M.intenseActive = false;
+  M.step          = 0;
+  M.phase         = 'pre';
+  musicState      = 'game';
+
+  const ac  = getAudio(); // ensures audioCtx + reverb exist
+  const BPM = 140;
+  const s16 = (60 / BPM) / 4; // 16th note ≈ 0.107s
+
+  // Drum bus — dry, no filter
+  const drumBus = ac.createGain(); drumBus.gain.value = 1.0;
+  drumBus.connect(masterGain);
+  M.drumBus = drumBus;
+
+  // Synth filter bus
+  M.synthFilter = ac.createBiquadFilter();
+  M.synthFilter.type = 'lowpass';
+  M.synthFilter.frequency.value = 1200;
+  M.synthFilter.Q.value = 1.2;
+  M.synthFilter.connect(masterGain);
+  if (M.reverb) M.synthFilter.connect(M.reverb);
+
+  // Lead gain → filter
+  M.leadGain = ac.createGain(); M.leadGain.gain.value = 0;
+  M.leadGain.connect(M.synthFilter);
+
+  // Bass gain → separate lowpass → master (no filter sweep on bass)
+  M.bassGain = ac.createGain(); M.bassGain.gain.value = 0;
+  const bassLpf = ac.createBiquadFilter();
+  bassLpf.type = 'lowpass'; bassLpf.frequency.value = 300;
+  M.bassGain.connect(bassLpf); bassLpf.connect(masterGain);
+
+  // Fade in
+  const now = ac.currentTime;
+  M.leadGain.gain.linearRampToValueAtTime(0.42, now + 1.2);
+  M.bassGain.gain.linearRampToValueAtTime(0.72, now + 0.8);
+
+  // Sequencer
+  function tick() {
+    if (musicState !== 'game' && musicState !== 'drop') return;
+    const t  = audioCtx.currentTime;
+    const s  = M.step % 16;
+    const dp = M.phase === 'drop';
+
+    const KICK  = dp ? D_KICK  : P_KICK;
+    const SNARE = dp ? D_SNARE : P_SNARE;
+    const HAT   = dp ? D_HAT   : P_HAT;
+    const OPEN  = dp ? D_OPEN  : P_OPEN;
+    const LEAD  = dp ? D_LEAD  : P_LEAD;
+    const BASS  = dp ? D_BASS  : P_BASS;
+
+    if (KICK[s])  kick(drumBus, t);
+    if (SNARE[s]) snare(drumBus, t);
+    if (HAT[s])   hat(drumBus, t, dp ? (s % 2 === 0 ? 0.11 : 0.06) : 0.09);
+    if (OPEN[s])  noiseBurst(6500, 0.07, 0.20, drumBus, t);
+
+    if (LEAD[s] && M.leadGain) {
+      if (dp) {
+        leadNote(LEAD[s], 0.32, 0.008, s16 * 0.55, s16 * 0.25, M.leadGain, t);
+      } else {
+        leadNote(LEAD[s], 0.30, 0.02,  s16 * 3.5,  s16 * 0.6,  M.leadGain, t);
+      }
+    }
+
+    M.step++;
+    M.seqTimeout = setTimeout(tick, s16 * 1000);
+  }
+
+  tick();
+}
+
+// ─────────────────────────────────────────────
+//  THE DROP
+// ─────────────────────────────────────────────
+function intensifyMusic() {
+  if (M.intenseActive) return;
+  M.intenseActive = true;
+  musicState = 'drop';
+
+  const ac = audioCtx;
+  const t  = ac.currentTime;
+
+  // 1. Filter whoosh open
+  if (M.synthFilter) {
+    M.synthFilter.frequency.cancelScheduledValues(t);
+    M.synthFilter.frequency.setValueAtTime(1200, t);
+    M.synthFilter.frequency.linearRampToValueAtTime(16000, t + 0.55);
+    M.synthFilter.Q.value = 4.0;
+  }
+
+  // 2. Beat gap — everything ducks for ~100ms then comes back louder
+  [M.leadGain, M.bassGain].forEach(g => {
+    if (!g) return;
+    g.gain.setValueAtTime(g.gain.value, t);
+    g.gain.linearRampToValueAtTime(0.0001, t + 0.10);
+    g.gain.linearRampToValueAtTime(g === M.leadGain ? 0.50 : 0.80, t + 0.20);
+  });
+
+  // 3. Pattern switches to drop inside sequencer (M.phase = 'drop')
+  M.phase = 'drop';
+
+  flash('#00f0ff25');
+}
+
+function stopAllMusic() {
+  clearTimeout(M.menuMelTimeout);
+  clearTimeout(M.seqTimeout);
+  M.menuMelTimeout = null;
+  M.seqTimeout     = null;
+  M.intenseActive  = false;
+  musicState       = 'off';
+
+  if (!audioCtx) return;
+  const now = audioCtx.currentTime;
+
+  [M.padGain, M.menuMelGain, M.leadGain, M.bassGain].forEach(g => {
+    if (!g) return;
+    try {
+      g.gain.cancelScheduledValues(now);
+      g.gain.setValueAtTime(g.gain.value, now);
+      g.gain.linearRampToValueAtTime(0, now + 0.12);
+    } catch(e) {}
+  });
+
+  // Stop pad oscillators
+  (M.padOscs || []).forEach(p => { try { p.osc.stop(); } catch(e){} });
+  M.padOscs = [];
+}
+
+// ─────────────────────────────────────────────
+//  SFX — tuned to F minor
+// ─────────────────────────────────────────────
+function playFlipSound() {
+  try {
+    const ac = getAudio();
+    const f1 = player.gravDir === 1 ? Fm.F5  : Fm.C5;
+    const f2 = player.gravDir === 1 ? Fm.C5  : Fm.F5;
+    const o  = ac.createOscillator();
+    const g  = ac.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(f1, ac.currentTime);
+    o.frequency.exponentialRampToValueAtTime(f2, ac.currentTime + 0.09);
+    g.gain.setValueAtTime(0.11, ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + 0.12);
+    o.connect(g); g.connect(masterGain);
+    o.start(ac.currentTime); o.stop(ac.currentTime + 0.14);
+  } catch(e) {}
+}
+
+function playDeathSound() {
+  try {
+    const ac = getAudio();
+    [Fm.F5, Fm.C5, Fm.Ab4, Fm.Eb4, Fm.C4].forEach((f, i) => {
+      synthNote(f, 'sawtooth', 0.15 - i * 0.02, 0.005, 0.04, 0.13, masterGain, ac.currentTime + i * 0.055);
+    });
+    noiseBurst(300, 0.36, 0.38, masterGain, ac.currentTime);
+  } catch(e) {}
+}
+
+function playWallSound() {
+  try {
+    const ac = getAudio();
+    const t  = ac.currentTime;
+    // Soft low thud — sine body with quick attack and smooth decay
+    const o = ac.createOscillator();
+    const g = ac.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(180, t);
+    o.frequency.exponentialRampToValueAtTime(90, t + 0.12);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.18, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+    o.connect(g); g.connect(masterGain);
+    o.start(t); o.stop(t + 0.2);
+  } catch(e) {}
+}
+
+function playNearDeathSound() {
+  try {
+    synthNote(Fm.Ab5, 'sine', 0.07, 0.004, 0.03, 0.05, masterGain, audioCtx.currentTime);
+  } catch(e) {}
+}
+
+function playDamageSound(dmg) {
+  try {
+    const ac = getAudio();
+    const t  = ac.currentTime;
+
+    // ── Impact crunch: filtered noise burst ──
+    noiseBurst(400, 0.45, 0.08, masterGain, t);
+
+    // ── Metallic clang: two detuned sine sweeps ──
+    [1, 1.06].forEach((ratio, i) => {
+      const o = ac.createOscillator();
+      const g = ac.createGain();
+      const lp = ac.createBiquadFilter();
+      lp.type = 'bandpass'; lp.frequency.value = 900 + i * 180; lp.Q.value = 4;
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(280 * ratio, t);
+      o.frequency.exponentialRampToValueAtTime(80 * ratio, t + 0.22);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(0.28 - i * 0.06, t + 0.006);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+      o.connect(lp); lp.connect(g); g.connect(masterGain);
+      o.start(t); o.stop(t + 0.3);
+    });
+
+    // ── Low thud under it all (scales with damage) ──
+    const thudVol = 0.12 + (dmg / 100) * 0.25;
+    const o2 = ac.createOscillator();
+    const g2 = ac.createGain();
+    o2.type = 'sine';
+    o2.frequency.setValueAtTime(120, t);
+    o2.frequency.exponentialRampToValueAtTime(35, t + 0.18);
+    g2.gain.setValueAtTime(0.0001, t);
+    g2.gain.linearRampToValueAtTime(thudVol, t + 0.008);
+    g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+    o2.connect(g2); g2.connect(masterGain);
+    o2.start(t); o2.stop(t + 0.25);
+
+    // ── Sharp pitch-drop squeal (the "ouch" layer) ──
+    const o3 = ac.createOscillator();
+    const g3 = ac.createGain();
+    o3.type = 'square';
+    o3.frequency.setValueAtTime(Fm.Eb5, t + 0.01);
+    o3.frequency.exponentialRampToValueAtTime(Fm.F3, t + 0.14);
+    g3.gain.setValueAtTime(0.0001, t + 0.01);
+    g3.gain.linearRampToValueAtTime(0.10, t + 0.02);
+    g3.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+    o3.connect(g3); g3.connect(masterGain);
+    o3.start(t + 0.01); o3.stop(t + 0.18);
+  } catch(e) {}
+}
+
+// ─────────────────────────────────────────────
+//  PARTICLES
+// ─────────────────────────────────────────────
+function spawnFlipParticles() {
+  const cx = player.x + player.w / 2;
+  const cy = player.y + player.h / 2;
+  for (let i = 0; i < 12; i++) {
+    const angle = (Math.PI * 2 * i) / 12 + Math.random() * 0.5;
+    const spd   = 60 + Math.random() * 120;
+    particles.push({
+      x: cx, y: cy,
+      vx: Math.cos(angle) * spd,
+      vy: Math.sin(angle) * spd,
+      life: 0.4 + Math.random() * 0.2,
+      maxLife: 0.4 + Math.random() * 0.2,
+      r: 2 + Math.random() * 2,
+      color: player.gravDir === 1 ? '#00f0ff' : '#ff0077',
+    });
+  }
+}
+
+function spawnDeathParticles() {
+  const cx = player.x + player.w / 2;
+  const cy = player.y + player.h / 2;
+  for (let i = 0; i < 30; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const spd   = 80 + Math.random() * 250;
+    particles.push({
+      x: cx, y: cy,
+      vx: Math.cos(angle) * spd,
+      vy: Math.sin(angle) * spd,
+      life: 0.6 + Math.random() * 0.4,
+      maxLife: 0.6 + Math.random() * 0.4,
+      r: 3 + Math.random() * 4,
+      color: ['#ff0077','#ffaa00','#ffffff','#ff4444'][Math.floor(Math.random()*4)],
+    });
+  }
+}
+
+function spawnNearDeathParticles() {
+  const cx = player.x + player.w / 2;
+  const cy = player.y + player.h / 2;
+  for (let i = 0; i < 6; i++) {
+    particles.push({
+      x: cx + (Math.random()-0.5)*20,
+      y: cy + (Math.random()-0.5)*20,
+      vx: (Math.random()-0.5)*80,
+      vy: (Math.random()-0.5)*80,
+      life: 0.2,
+      maxLife: 0.2,
+      r: 2,
+      color: '#ffaa00',
+    });
+  }
+}
+
+// ─────────────────────────────────────────────
+//  SCREEN MANAGEMENT
+// ─────────────────────────────────────────────
+function showScreen(el) { el.classList.remove('hidden'); el.classList.add('visible'); }
+function hideScreen(el) { el.classList.remove('visible'); el.classList.add('hidden'); }
+
+function flash(color) {
+  flashEl.style.background = color;
+  flashEl.style.opacity = '1';
+  setTimeout(() => { flashEl.style.opacity = '0'; }, 60);
+}
+
+// ─────────────────────────────────────────────
+//  GAME FLOW
+// ─────────────────────────────────────────────
+function _startGameInternal(startX, startY) {
+  gameState = 'playing';
+  hideScreen(startScreen);
+  hideScreen(deathScreen);
+  initLevel(startX, startY);
+  startGameMusic();
+  lastTime = performance.now();
+  if (animFrame) cancelAnimationFrame(animFrame);
+  loop(lastTime);
+}
+
+// For death-screen restart (no explosion needed)
+function startGame() {
+  _startGameInternal();
+}
+
+function killPlayer() {
+  if (!player.alive) return;
+  player.alive = false;
+  gameState = 'dead';
+  stopAllMusic();
+  playDeathSound();
+  spawnDeathParticles();
+  flash('#ff007740');
+
+  // Screen shake via CSS
+  wrapper.style.animation = 'none';
+  requestAnimationFrame(() => {
+    wrapper.style.animation = 'shake 0.3s ease';
+  });
+
+  const finalScore = Math.floor(score);
+  if (finalScore > bestScore) {
+    bestScore = finalScore;
+    localStorage.setItem('flipfall_best', bestScore);
+  }
+
+  deathScore.textContent = finalScore + ' m';
+  deathBest.textContent  = finalScore >= bestScore ? '★ NEW BEST!' : 'BEST: ' + bestScore + ' m';
+  bestDisplay.textContent = 'BEST: ' + bestScore;
+
+  setTimeout(() => showScreen(deathScreen), 500);
+}
+
+// ─────────────────────────────────────────────
+//  UPDATE
+// ─────────────────────────────────────────────
+function update(dt) {
+  if (gameState !== 'playing' || !player.alive) return;
+
+  gameTime += dt;
+
+  // Speed ramp: 0→60s linearly reaches max
+  const speedT = Math.min(1, gameTime / 120);
+  currentSpeed = BASE_SPEED + speedT * MAX_SPEED_BONUS;
+  speedFill.style.width = (speedT * 100) + '%';
+
+  // Score = distance
+  score += currentSpeed * dt / 10;
+  scoreDisplay.textContent = Math.floor(score);
+
+  // Player cooldown
+  player.flipCooldown = Math.max(0, player.flipCooldown - dt);
+
+  // Gravity physics
+  player.vy += player.gravDir * GRAVITY_FORCE * dt;
+  player.vy  = Math.sign(player.vy) * Math.min(Math.abs(player.vy), MAX_FALL_SPEED);
+  player.y  += player.vy * dt;
+
+  // Trail
+  player.trail.push({ x: player.x, y: player.y + player.h/2 });
+  if (player.trail.length > 14) player.trail.shift();
+
+  // Corridor boundary collision
+  const wasOnWall = player.onWall;
+  player.onWall = false;
+
+  if (player.y < CORRIDOR_TOP) {
+    player.y  = CORRIDOR_TOP;
+    player.vy = 0;
+    player.onWall = true;
+    if (!wasOnWall) playWallSound();
+  }
+  if (player.y + player.h > CORRIDOR_BOTTOM) {
+    player.y  = CORRIDOR_BOTTOM - player.h;
+    player.vy = 0;
+    player.onWall = true;
+    if (!wasOnWall) playWallSound();
+  }
+
+  // Obstacle scroll & update
+  for (let i = obstacles.length - 1; i >= 0; i--) {
+    const o = obstacles[i];
+    o.x -= currentSpeed * dt;
+
+    // Moving hazard oscillation
+    if (o.type === 'moving') {
+      o.phase += dt;
+      o.y = o.originY + Math.sin(o.phase * (o.vy > 0 ? 1.5 : 2)) * o.amplitude;
+    }
+
+    // Remove off-screen left
+    if (o.x + o.w < -20) {
+      obstacles.splice(i, 1);
+      continue;
+    }
+
+    // Collision — deal damage based on obstacle type, with iframes
+    if (rectsOverlap(player, o)) {
+      if (player.iframes <= 0) {
+        // Damage values: saws hurt most, asteroids moderate, spikes least
+        const dmg = o.type === 'spike'  ? 20   // saw blades
+                  : o.type === 'moving' ? 35   // asteroid
+                  : 25;                         // metallic spike wall
+        player.hp     = Math.max(0, player.hp - dmg);
+        player.iframes = 0.6;
+        playDamageSound(dmg);
+        flash('#ff003360');
+        spawnDeathParticles(); // reuse for hit sparks
+        wrapper.style.animation = 'none';
+        requestAnimationFrame(() => { wrapper.style.animation = 'shake 0.3s ease'; });
+        if (player.hp <= 0) { killPlayer(); return; }
+      }
+    }
+
+    // Near-death detection (slightly larger hitbox)
+    const closeBox = { x: player.x - 6, y: player.y - 6, w: player.w + 12, h: player.h + 12 };
+    if (rectsOverlap(closeBox, o) && !rectsOverlap(player, o)) {
+      if (player.nearDeathTimer <= 0) {
+        player.nearDeathTimer = 0.12;
+        spawnNearDeathParticles();
+        playNearDeathSound();
+      }
+    }
+  }
+
+  // Tick invincibility frames
+  player.iframes = Math.max(0, player.iframes - dt);
+
+  // Update health bar
+  const hpPct = player.hp / 100;
+  healthFill.style.width = (hpPct * 100) + '%';
+  // Colour shifts red→orange→green based on HP
+  const r = Math.round(255);
+  const g = Math.round(hpPct * 180);
+  healthFill.style.boxShadow = `0 0 8px rgba(255,${g},0,0.6)`;
+  healthFill.style.background = hpPct > 0.6
+    ? 'linear-gradient(90deg,#00dd66,#44ff88)'
+    : hpPct > 0.3
+    ? 'linear-gradient(90deg,#ffaa00,#ffdd00)'
+    : 'linear-gradient(90deg,#ff0055,#ff4444)';
+
+  // Flash player when invincible
+  player.visible = player.iframes <= 0 || Math.floor(player.iframes * 10) % 2 === 0;
+
+  // Spawn new obstacles
+  const lastX = obstacles.length > 0
+    ? Math.max(...obstacles.map(o => o.x + o.w))
+    : W;
+  const gap = 220 + Math.max(0, 160 - gameTime * 1.3);
+  if (lastX < W + SPAWN_MARGIN) {
+    spawnObstacleAt(W + SPAWN_MARGIN + Math.random() * 60);
+    if (gameTime > 30 && Math.random() < 0.3) {
+      spawnObstacleAt(W + SPAWN_MARGIN + gap + Math.random() * 40);
+    }
+  }
+
+  // Update particles
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x    += p.vx * dt;
+    p.y    += p.vy * dt;
+    p.vx   *= 0.92;
+    p.vy   *= 0.92;
+    p.life -= dt;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+
+  // BG stars scroll
+  for (const s of bgStars) {
+    s.x -= currentSpeed * s.spd * 0.04 * dt;
+    if (s.x < 0) s.x = W;
+  }
+}
+
+function checkNearDeath(wall) {
+  if (player.nearDeathTimer <= 0) {
+    player.nearDeathTimer = 0.15;
+    spawnNearDeathParticles();
+    if (wall) playNearDeathSound();
+  }
+}
+
+function rectsOverlap(a, b) {
+  return a.x < b.x + b.w &&
+         a.x + a.w > b.x &&
+         a.y < b.y + b.h &&
+         a.y + a.h > b.y;
+}
+
+// ─────────────────────────────────────────────
+//  DRAW
+// ─────────────────────────────────────────────
+function draw(now) {
+  ctx.clearRect(0, 0, W, H);
+
+  // Background
+  const bgGrad = ctx.createLinearGradient(0, 0, 0, H);
+  bgGrad.addColorStop(0, '#020212');
+  bgGrad.addColorStop(1, '#050520');
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, W, H);
+
+  // BG stars
+  for (const s of bgStars) {
+    ctx.save();
+    ctx.globalAlpha = 0.4 + s.spd * 0.5;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // Corridor walls (glowing edge lines)
+  drawCorridorWalls();
+
+  // Grid lines inside corridor (subtle)
+  drawGrid();
+
+  // Obstacles
+  for (const o of obstacles) drawObstacle(o);
+
+  // Player trail
+  drawTrail();
+
+  // Player (flickers during invincibility)
+  if ((player.alive || gameState === 'dead') && player.visible !== false) drawPlayer();
+
+  // Particles
+  for (const p of particles) {
+    const alpha = p.life / p.maxLife;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = p.color;
+    ctx.shadowBlur  = 8;
+    ctx.shadowColor = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r * alpha, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // Near-death vignette
+  if (player.nearDeathTimer > 0) {
+    const a = player.nearDeathTimer / 0.15 * 0.3;
+    const vig = ctx.createRadialGradient(W/2, H/2, H*0.2, W/2, H/2, H*0.7);
+    vig.addColorStop(0, 'transparent');
+    vig.addColorStop(1, `rgba(255,170,0,${a})`);
+    ctx.fillStyle = vig;
+    ctx.fillRect(0, 0, W, H);
+  }
+
+  // Gravity direction indicator (subtle arrow near player)
+  drawGravIndicator();
+}
+
+function drawCorridorWalls() {
+  // Top wall
+  const topGrad = ctx.createLinearGradient(0, 0, 0, CORRIDOR_TOP);
+  topGrad.addColorStop(0, '#050520');
+  topGrad.addColorStop(1, '#0a0a30');
+  ctx.fillStyle = topGrad;
+  ctx.fillRect(0, 0, W, CORRIDOR_TOP);
+
+  // Bottom wall
+  const botGrad = ctx.createLinearGradient(0, CORRIDOR_BOTTOM, 0, H);
+  botGrad.addColorStop(0, '#0a0a30');
+  botGrad.addColorStop(1, '#050520');
+  ctx.fillStyle = botGrad;
+  ctx.fillRect(0, CORRIDOR_BOTTOM, W, H - CORRIDOR_BOTTOM);
+
+  // Top edge glow line
+  ctx.save();
+  ctx.shadowBlur  = 12;
+  ctx.shadowColor = '#00f0ff';
+  ctx.strokeStyle = '#00f0ff80';
+  ctx.lineWidth   = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(0, CORRIDOR_TOP);
+  ctx.lineTo(W, CORRIDOR_TOP);
+  ctx.stroke();
+
+  // Bottom edge glow line
+  ctx.shadowColor = '#ff0077';
+  ctx.strokeStyle = '#ff007780';
+  ctx.beginPath();
+  ctx.moveTo(0, CORRIDOR_BOTTOM);
+  ctx.lineTo(W, CORRIDOR_BOTTOM);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawGrid() {
+  ctx.save();
+  ctx.globalAlpha = 0.04;
+  ctx.strokeStyle = '#00f0ff';
+  ctx.lineWidth   = 1;
+  const scrollOffset = (performance.now() * 0.06 * currentSpeed / BASE_SPEED) % 60;
+  for (let x = -scrollOffset; x < W; x += 60) {
+    ctx.beginPath();
+    ctx.moveTo(x, CORRIDOR_TOP);
+    ctx.lineTo(x, CORRIDOR_BOTTOM);
+    ctx.stroke();
+  }
+  for (let y = CORRIDOR_TOP; y <= CORRIDOR_BOTTOM; y += 60) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(W, y);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawObstacle(o) {
+  ctx.save();
+
+  if (o.type === 'spike') {
+    // ── CIRCULAR SAW ──
+    const cx      = o.x + o.w / 2;
+    const radius  = o.w / 2;
+    const fromTop = o.side === 'top';
+    const cy      = fromTop ? CORRIDOR_TOP + radius * 0.5 : CORRIDOR_BOTTOM - radius * 0.5;
+    const spin    = (performance.now() * 0.006) + o.x * 0.05;
+    const teeth   = 16;
+
+    ctx.shadowBlur  = 12;
+    ctx.shadowColor = '#aaaacc';
+
+    // Outer saw body
+    const bodyGrad = ctx.createRadialGradient(cx - radius * 0.2, cy - radius * 0.2, radius * 0.05, cx, cy, radius);
+    bodyGrad.addColorStop(0,   '#9a9aaa');
+    bodyGrad.addColorStop(0.5, '#5a5a6e');
+    bodyGrad.addColorStop(1,   '#2a2a3a');
+    ctx.fillStyle = bodyGrad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Teeth
+    ctx.fillStyle   = '#c8c8dc';
+    ctx.strokeStyle = '#e0e0f0';
+    ctx.lineWidth   = 0.6;
+    for (let i = 0; i < teeth; i++) {
+      const a1 = spin + (Math.PI * 2 * i) / teeth;
+      const a2 = spin + (Math.PI * 2 * (i + 0.5)) / teeth;
+      const a3 = spin + (Math.PI * 2 * (i + 1)) / teeth;
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(a1) * radius,       cy + Math.sin(a1) * radius);
+      ctx.lineTo(cx + Math.cos(a2) * (radius + 6), cy + Math.sin(a2) * (radius + 6));
+      ctx.lineTo(cx + Math.cos(a3) * radius,       cy + Math.sin(a3) * radius);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // Inner rings
+    ctx.shadowBlur  = 0;
+    ctx.strokeStyle = '#ffffff18';
+    ctx.lineWidth   = 1;
+    ctx.beginPath(); ctx.arc(cx, cy, radius * 0.65, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, radius * 0.35, 0, Math.PI * 2); ctx.stroke();
+
+    // Centre bolt
+    ctx.fillStyle = '#ddddee';
+    ctx.beginPath(); ctx.arc(cx, cy, radius * 0.12, 0, Math.PI * 2); ctx.fill();
+
+    // Paint wall color over the buried half so it blends seamlessly
+    ctx.shadowBlur = 0;
+    if (fromTop) {
+      const cover = ctx.createLinearGradient(0, 0, 0, CORRIDOR_TOP);
+      cover.addColorStop(0, '#050520');
+      cover.addColorStop(1, '#0a0a30');
+      ctx.fillStyle = cover;
+      ctx.fillRect(o.x - 8, 0, o.w + 16, CORRIDOR_TOP);
+    } else {
+      const cover = ctx.createLinearGradient(0, CORRIDOR_BOTTOM, 0, H);
+      cover.addColorStop(0, '#0a0a30');
+      cover.addColorStop(1, '#050520');
+      ctx.fillStyle = cover;
+      ctx.fillRect(o.x - 8, CORRIDOR_BOTTOM, o.w + 16, H);
+    }
+
+  } else if (o.type === 'wall') {
+    // ── METALLIC SPIKE — long sharp spike from top or bottom wall ──
+    // Determine which wall this segment is attached to
+    const fromTop = o.y === CORRIDOR_TOP;
+    const cx      = o.x + o.w / 2;
+    const baseY   = fromTop ? o.y : o.y + o.h;  // where it meets the wall
+    const tipY    = fromTop ? o.y + o.h : o.y;  // the sharp point
+
+    const halfBase = o.w / 2;
+
+    // Metallic gradient along the spike length
+    const spikeGrad = ctx.createLinearGradient(o.x, baseY, o.x + o.w, baseY);
+    spikeGrad.addColorStop(0,    '#2a2a3a');
+    spikeGrad.addColorStop(0.25, '#9a9ab8');
+    spikeGrad.addColorStop(0.5,  '#d8d8f0');
+    spikeGrad.addColorStop(0.75, '#7a7a98');
+    spikeGrad.addColorStop(1,    '#2a2a3a');
+
+    ctx.shadowBlur  = 14;
+    ctx.shadowColor = '#8888cc';
+    ctx.fillStyle   = spikeGrad;
+
+    // Main spike body — sharp triangle
+    ctx.beginPath();
+    ctx.moveTo(cx - halfBase, baseY);
+    ctx.lineTo(cx + halfBase, baseY);
+    ctx.lineTo(cx,            tipY);
+    ctx.closePath();
+    ctx.fill();
+
+    // Bright centre highlight line running down the spike
+    const hlGrad = ctx.createLinearGradient(cx, baseY, cx, tipY);
+    hlGrad.addColorStop(0,   '#ffffff60');
+    hlGrad.addColorStop(0.6, '#ffffff20');
+    hlGrad.addColorStop(1,   '#ffffff00');
+    ctx.strokeStyle = hlGrad;
+    ctx.lineWidth   = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(cx, fromTop ? baseY + 4 : baseY - 4);
+    ctx.lineTo(cx, fromTop ? tipY + o.h * 0.12 : tipY - o.h * 0.12);
+    ctx.stroke();
+
+    // Edge outline for crispness
+    ctx.strokeStyle = '#aaaacc88';
+    ctx.lineWidth   = 0.8;
+    ctx.beginPath();
+    ctx.moveTo(cx - halfBase, baseY);
+    ctx.lineTo(cx,            tipY);
+    ctx.lineTo(cx + halfBase, baseY);
+    ctx.stroke();
+
+  } else if (o.type === 'moving') {
+    // ── ASTEROID — irregular rocky polygon, floating & rotating ──
+    const cx = o.x + o.w / 2;
+    const cy = o.y + o.h / 2;
+    const rx = o.w / 2;
+    const ry = o.h / 2;
+
+    // Deterministic shape per asteroid (seed from spawn position)
+    const seed  = (o.originY * 4.7 + o.w * 2.3) | 0;
+    const rng   = (n) => (Math.sin(seed + n) * 0.5 + 0.5);
+    const verts = 11;
+    const rot   = o.phase * 0.4; // slow rotation tied to oscillation phase
+
+    ctx.shadowBlur  = 12;
+    ctx.shadowColor = '#778899';
+
+    // Asteroid fill — dark rocky grey
+    const ag = ctx.createRadialGradient(cx - rx * 0.2, cy - ry * 0.2, rx * 0.1, cx, cy, rx * 1.1);
+    ag.addColorStop(0,   '#8a8a9e');
+    ag.addColorStop(0.5, '#5c5c70');
+    ag.addColorStop(1,   '#2e2e42');
+    ctx.fillStyle = ag;
+
+    ctx.beginPath();
+    for (let i = 0; i < verts; i++) {
+      const angle  = (Math.PI * 2 * i) / verts + rot;
+      const jitter = 0.68 + rng(i) * 0.38;
+      const px     = cx + Math.cos(angle) * rx * jitter;
+      const py     = cy + Math.sin(angle) * ry * jitter;
+      i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+
+    // Rocky outline
+    ctx.strokeStyle = '#aaaacc';
+    ctx.lineWidth   = 1.2;
+    ctx.stroke();
+
+    // Crater details — two small ellipses
+    ctx.globalAlpha = 0.25;
+    ctx.fillStyle   = '#000018';
+    ctx.beginPath();
+    ctx.ellipse(cx - rx * 0.28 + Math.cos(rot) * rx * 0.1,
+                cy - ry * 0.2  + Math.sin(rot) * ry * 0.1,
+                rx * 0.18, ry * 0.13, rot, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(cx + rx * 0.22 + Math.cos(rot + 1) * rx * 0.08,
+                cy + ry * 0.25 + Math.sin(rot + 1) * ry * 0.08,
+                rx * 0.12, ry * 0.09, rot + 0.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // Specular highlight
+    ctx.beginPath();
+    ctx.ellipse(cx - rx * 0.22, cy - ry * 0.28, rx * 0.15, ry * 0.09, -0.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff28';
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function drawTrail() {
+  if (player.trail.length < 2) return;
+  for (let i = 1; i < player.trail.length; i++) {
+    const t = i / player.trail.length;
+    const a = t * 0.5;
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.fillStyle = player.gravDir === 1 ? '#00f0ff' : '#ff0077';
+    ctx.shadowBlur = 6;
+    ctx.shadowColor = player.gravDir === 1 ? '#00f0ff' : '#ff0077';
+    const r = (PLAYER_SIZE / 2) * t * 0.7;
+    ctx.beginPath();
+    ctx.arc(player.trail[i].x + player.w/2, player.trail[i].y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+function drawPlayer() {
+  const cx = player.x + player.w / 2;
+  const cy = player.y + player.h / 2;
+  const r  = player.w / 2;
+  const col = player.alive
+    ? (player.gravDir === 1 ? '#00f0ff' : '#ff0077')
+    : '#ffffff';
+
+  ctx.save();
+
+  // Outer glow
+  ctx.shadowBlur  = 24;
+  ctx.shadowColor = col;
+
+  // Diamond shape
+  const pts = [
+    [cx,      cy - r * 1.3], // top
+    [cx + r,  cy],            // right
+    [cx,      cy + r * 1.3], // bottom
+    [cx - r,  cy],            // left
+  ];
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  ctx.closePath();
+
+  const pGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 1.3);
+  pGrad.addColorStop(0, '#ffffff');
+  pGrad.addColorStop(0.4, col);
+  pGrad.addColorStop(1, col + '88');
+  ctx.fillStyle = pGrad;
+  ctx.fill();
+
+  // Inner bright core
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 0.35, 0, Math.PI * 2);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+
+  ctx.restore();
+
+  // Gravity direction arrow under/over player
+  if (player.alive) {
+    const arrY  = player.gravDir === 1 ? cy + r + 8 : cy - r - 8;
+    const arrDir = player.gravDir;
+    ctx.save();
+    ctx.globalAlpha = 0.6;
+    ctx.fillStyle = col;
+    ctx.shadowBlur = 6;
+    ctx.shadowColor = col;
+    ctx.beginPath();
+    ctx.moveTo(cx, arrY + arrDir * 8);
+    ctx.lineTo(cx - 5, arrY);
+    ctx.lineTo(cx + 5, arrY);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+function drawGravIndicator() {
+  // Subtle gravity indicator on left side
+  if (!player.alive) return;
+  const col = player.gravDir === 1 ? '#00f0ff' : '#ff0077';
+  ctx.save();
+  ctx.globalAlpha = 0.3;
+  ctx.font = '9px Share Tech Mono';
+  ctx.fillStyle = col;
+  ctx.letterSpacing = '2px';
+  ctx.fillText(player.gravDir === 1 ? '▼ DOWN' : '▲ UP', 16, H - 20);
+  ctx.restore();
+}
+
+// ─────────────────────────────────────────────
+//  MAIN LOOP
+// ─────────────────────────────────────────────
+function loop(now) {
+  const dt = Math.min((now - lastTime) / 1000, 0.05); // cap at 50ms
+  lastTime = now;
+
+  update(dt);
+  draw(now);
+
+  animFrame = requestAnimationFrame(loop);
+}
+
+// ─────────────────────────────────────────────
+//  CSS SHAKE ANIMATION (injected)
+// ─────────────────────────────────────────────
+const style = document.createElement('style');
+style.textContent = `
+@keyframes shake {
+  0%  { transform: translate(0,0) rotate(0deg); }
+  15% { transform: translate(-6px, 3px) rotate(-1deg); }
+  30% { transform: translate(5px,-4px) rotate(1deg); }
+  45% { transform: translate(-4px, 5px) rotate(-0.5deg); }
+  60% { transform: translate(4px,-3px) rotate(0.5deg); }
+  75% { transform: translate(-2px, 2px); }
+  100%{ transform: translate(0,0) rotate(0deg); }
+}`;
+document.head.appendChild(style);
+
+// ═══════════════════════════════════════════════════════
+//  MENU WORLD — animated canvas menu
+//
+//  IDLE:   scrolling game world + glowing title + subtitle
+//          + pulsing TAP TO BEGIN prompt
+//
+//  ON TAP: dot spawns above screen, falls with gravity,
+//          smashes through each letter of FLIPFALL
+//          (letters explode into particles on contact),
+//          dot hits corridor floor → game starts
+// ═══════════════════════════════════════════════════════
+
+let MW = {
+  stars: [],
+  gridOffset: 0,
+  particles: [],   // letter debris + general sparks
+
+  // Title letter data (set up after first resize)
+  letters: [],     // { char, x, y, w, h, alive, vx, vy, rot, rotV, alpha }
+
+  // The falling dot
+  dot: null,       // null = not falling yet
+  dotStarted: false,
+
+  // Phase: 'idle' | 'falling' | 'done'
+  phase: 'idle',
+  pulseT: 0,       // for tap-prompt pulse
+};
+
+// ── Build letter data — called right before drop so font is loaded ──
+function buildLetterData() {
+  const fSize = Math.min(W * 0.155, 68);
+  ctx.save();
+  ctx.font = `900 ${fSize}px Orbitron, sans-serif`;
+  ctx.textBaseline = 'middle';
+
+  const rows = ['FLIP', 'FALL'];
+  MW.letters = [];
+
+  rows.forEach((word, rowIdx) => {
+    const totalW = ctx.measureText(word).width;
+    const rowX   = (W - totalW) / 2;
+    const rowY   = H * 0.30 + rowIdx * (fSize * 1.6);
+
+    // Store the whole word as one collidable block
+    MW.letters.push({
+      char: word,        // whole word
+      x:    rowX,
+      y:    rowY,
+      w:    totalW,
+      h:    fSize,
+      alive: true,
+      vx: 0, vy: 0, rot: 0, rotV: 0, alpha: 1,
+    });
+  });
+  ctx.restore();
+}
+
+function initMenuWorld() {
+  MW.stars = Array.from({length: 60}, () => ({
+    x: Math.random() * W, y: Math.random() * H,
+    r: Math.random() * 1.5 + 0.3, spd: Math.random() * 0.4 + 0.1,
+  }));
+  MW.gridOffset = 0;
+  MW.particles  = [];
+  MW.dot        = null;
+  MW.phase      = 'idle';
+  MW.pulseT     = 0;
+  MW.dropDone   = false;
+  MW.letters    = []; // built lazily on drop
+}
+
+// ── Explode a letter block into particles ──
+function smashLetter(letter) {
+  const colors = ['#00f0ff','#ff0077','#ffffff','#ffaa00','#cc88ff'];
+  for (let i = 0; i < 30; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const spd   = 80 + Math.random() * 320;
+    MW.particles.push({
+      x: letter.x + Math.random() * letter.w,
+      y: letter.y + (Math.random() - 0.5) * letter.h,
+      vx: Math.cos(angle) * spd,
+      vy: Math.sin(angle) * spd - 80,
+      life: 0.6 + Math.random() * 0.6,
+      maxLife: 1.2,
+      r: 2 + Math.random() * 5,
+      color: colors[Math.floor(Math.random() * colors.length)],
+    });
+  }
+  letter.alive = false;
+  letter.vx    = (Math.random() - 0.5) * 200;
+  letter.vy    = -60 - Math.random() * 120;
+  letter.rotV  = (Math.random() - 0.5) * 8;
+}
+
+// ── Start the drop ──
+function startDotDrop() {
+  // Rebuild letters now — font guaranteed loaded after page interaction
+  buildLetterData();
+
+  MW.phase    = 'falling';
+  MW.dropDone = false;
+  MW.dot = {
+    x:  W / 2 - PLAYER_SIZE / 2,
+    y:  0,    // start at very top of screen, visible immediately
+    vy: 0,
+    trail: [],
+  };
+}
+
+const MENU_GRAV = 420;
+
+function updateMenuWorld(dt) {
+  MW.pulseT += dt;
+  MW.gridOffset = (MW.gridOffset + 60 * dt) % 60;
+  for (const s of MW.stars) {
+    s.x -= 24 * s.spd * dt;
+    if (s.x < 0) s.x = W;
+  }
+
+  for (let i = MW.particles.length - 1; i >= 0; i--) {
+    const p = MW.particles[i];
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    p.vy += 260 * dt; p.vx *= 0.97;
+    p.life -= dt;
+    if (p.life <= 0) MW.particles.splice(i, 1);
+  }
+
+  for (const l of MW.letters) {
+    if (!l.alive) {
+      l.x += l.vx * dt; l.y += l.vy * dt;
+      l.vy += 360 * dt; l.vx *= 0.98;
+      l.rot += l.rotV * dt;
+      l.alpha = Math.max(0, l.alpha - dt * 0.9);
+    }
+  }
+
+  if (!MW.dot || MW.phase !== 'falling' || MW.dropDone) return;
+
+  const dot = MW.dot;
+  dot.vy += MENU_GRAV * dt;
+  dot.y  += dot.vy * dt;
+
+  dot.trail.push({ x: dot.x + PLAYER_SIZE / 2, y: dot.y + PLAYER_SIZE / 2 });
+  if (dot.trail.length > 14) dot.trail.shift();
+
+  // Check if dot passes through any alive letter — if so blow ALL up
+  const dotCY = dot.y + PLAYER_SIZE / 2;
+  const dotL  = dot.x - 4;
+  const dotR  = dot.x + PLAYER_SIZE + 4;
+  const touched = MW.letters.some(l =>
+    l.alive &&
+    dotR > l.x && dotL < l.x + l.w &&
+    dotCY >= l.y - l.h * 0.7 && dotCY <= l.y + l.h * 0.7
+  );
+  if (touched) {
+    MW.letters.forEach(l => { if (l.alive) smashLetter(l); });
+    playWallSound();
+    flash('#ffffff40');
+  }
+
+  // Hit corridor floor → start game
+  if (dot.y + PLAYER_SIZE >= CORRIDOR_BOTTOM) {
+    dot.y = CORRIDOR_BOTTOM - PLAYER_SIZE;
+    MW.dropDone = true;
+    for (let i = 0; i < 36; i++) {
+      const angle = Math.PI + Math.random() * Math.PI;
+      const spd   = 100 + Math.random() * 300;
+      const cols  = ['#00f0ff','#ff0077','#ffffff','#ffaa00'];
+      MW.particles.push({
+        x: dot.x + PLAYER_SIZE / 2, y: CORRIDOR_BOTTOM,
+        vx: Math.cos(angle) * spd, vy: Math.sin(angle) * spd,
+        life: 0.6 + Math.random() * 0.4, maxLife: 1.0,
+        r: 3 + Math.random() * 5,
+        color: cols[Math.floor(Math.random() * cols.length)],
+      });
+    }
+    playDamageSound(30);
+    const landX = dot.x;
+    const landY = dot.y;
+    setTimeout(() => { hideScreen(startScreen); _startGameInternal(landX, landY); }, 500);
+  }
+}
+
+function drawMenuWorld() {
+  const mw = MW;
+
+  // Background
+  const bgGrad = ctx.createLinearGradient(0, 0, 0, H);
+  bgGrad.addColorStop(0, '#020212');
+  bgGrad.addColorStop(1, '#050520');
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, W, H);
+
+  // Stars
+  for (const s of mw.stars) {
+    ctx.save();
+    ctx.globalAlpha = 0.4 + s.spd * 0.5;
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  // Corridor walls
+  drawCorridorWalls();
+
+  // Grid
+  ctx.save();
+  ctx.globalAlpha = 0.04;
+  ctx.strokeStyle = '#00f0ff';
+  ctx.lineWidth = 1;
+  for (let x = -mw.gridOffset; x < W; x += 60) {
+    ctx.beginPath(); ctx.moveTo(x, CORRIDOR_TOP); ctx.lineTo(x, CORRIDOR_BOTTOM); ctx.stroke();
+  }
+  for (let y = CORRIDOR_TOP; y <= CORRIDOR_BOTTOM; y += 60) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+  ctx.restore();
+
+  // ── TITLE ──
+  const fSize = Math.min(W * 0.155, 68);
+  ctx.font         = `900 ${fSize}px Orbitron, sans-serif`;
+  ctx.textBaseline = 'middle';
+  ctx.textAlign    = 'left';
+
+  if (mw.phase === 'idle') {
+    // Draw FLIP / FALL as static glowing title
+    ['FLIP','FALL'].forEach((word, rowIdx) => {
+      const tw   = ctx.measureText(word).width;
+      const tx   = (W - tw) / 2;
+      const ty   = H * 0.30 + rowIdx * (fSize * 1.6);
+      ctx.save();
+      ctx.shadowBlur  = 22;
+      ctx.shadowColor = '#00f0ff';
+      const grad = ctx.createLinearGradient(tx, ty - fSize * 0.5, tx, ty + fSize * 0.5);
+      grad.addColorStop(0,   '#ffffff');
+      grad.addColorStop(0.4, '#00f0ff');
+      grad.addColorStop(1,   '#ff0077');
+      ctx.fillStyle = grad;
+      ctx.fillText(word, tx, ty);
+      ctx.restore();
+    });
+  } else {
+    // During/after animation — draw living letters and tumbling debris
+    for (const l of mw.letters) {
+      ctx.save();
+      if (!l.alive) {
+        if (l.alpha <= 0) { ctx.restore(); continue; }
+        ctx.globalAlpha = Math.max(0, l.alpha);
+        ctx.translate(l.x + l.w / 2, l.y);
+        ctx.rotate(l.rot);
+        ctx.fillStyle = '#ffffff50';
+        ctx.fillText(l.char, -l.w / 2, 0);
+      } else {
+        ctx.shadowBlur  = 22;
+        ctx.shadowColor = '#00f0ff';
+        const grad = ctx.createLinearGradient(l.x, l.y - fSize * 0.5, l.x, l.y + fSize * 0.5);
+        grad.addColorStop(0,   '#ffffff');
+        grad.addColorStop(0.4, '#00f0ff');
+        grad.addColorStop(1,   '#ff0077');
+        ctx.fillStyle = grad;
+        ctx.fillText(l.char, l.x, l.y);
+      }
+      ctx.restore();
+    }
+  }
+
+  // Subtitle + prompt (idle only)
+  if (mw.phase === 'idle') {
+    const subY = H * 0.30 + fSize * 3.5;
+    ctx.save();
+    ctx.textAlign   = 'center';
+    ctx.font        = `11px "Share Tech Mono", monospace`;
+    ctx.fillStyle   = '#ffffff50';
+    ctx.fillText('TAP TO FLIP GRAVITY', W / 2, subY);
+    const pulse = 0.4 + 0.6 * Math.abs(Math.sin(mw.pulseT * 2.2));
+    ctx.globalAlpha = pulse;
+    ctx.font        = `bold 12px Orbitron, sans-serif`;
+    ctx.fillStyle   = '#00f0ff';
+    ctx.shadowBlur  = 16;
+    ctx.shadowColor = '#00f0ff';
+    ctx.fillText('▶  PRESS PLAY', W / 2, subY + 36);
+    ctx.restore();
+  }
+
+  // Particles (debris + impact sparks)
+  for (const p of mw.particles) {
+    const alpha = Math.max(0, p.life / p.maxLife);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle   = p.color;
+    ctx.shadowBlur  = 8;
+    ctx.shadowColor = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r * alpha, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // ── FALLING DOT ──
+  if (mw.dot && mw.phase !== 'idle') {
+    const dot = mw.dot;
+    const cx  = dot.x + PLAYER_SIZE / 2;
+    const cy  = dot.y + PLAYER_SIZE / 2;
+    const r   = PLAYER_SIZE / 2;
+    const col = '#00f0ff';
+
+    // Trail
+    for (let i = 1; i < dot.trail.length; i++) {
+      const t = i / dot.trail.length;
+      ctx.save();
+      ctx.globalAlpha = t * 0.45;
+      ctx.fillStyle   = col;
+      ctx.shadowBlur  = 6; ctx.shadowColor = col;
+      ctx.beginPath();
+      ctx.arc(dot.trail[i].x, dot.trail[i].y, r * t * 0.7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // Diamond
+    ctx.save();
+    ctx.shadowBlur  = 28;
+    ctx.shadowColor = col;
+    ctx.beginPath();
+    ctx.moveTo(cx,      cy - r * 1.3);
+    ctx.lineTo(cx + r,  cy);
+    ctx.lineTo(cx,      cy + r * 1.3);
+    ctx.lineTo(cx - r,  cy);
+    ctx.closePath();
+    const pg = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 1.3);
+    pg.addColorStop(0,   '#ffffff');
+    pg.addColorStop(0.4, col);
+    pg.addColorStop(1,   col + '88');
+    ctx.fillStyle = pg;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(cx, cy, r * 0.35, 0, Math.PI * 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+// ─────────────────────────────────────────────
+//  IDLE LOOP
+// ─────────────────────────────────────────────
+let lastMenuTime = 0;
+
+function idleDraw(now) {
+  if (gameState !== 'start') return;
+  const dt = Math.min((now - (lastMenuTime || now)) / 1000, 0.05);
+  lastMenuTime = now;
+  updateMenuWorld(dt);
+  drawMenuWorld();
+  animFrame = requestAnimationFrame(idleDraw);
+}
+
+document.addEventListener('dblclick', e => e.preventDefault());
+
+initMenuWorld();
+animFrame = requestAnimationFrame(idleDraw);
+
+// Browsers require a user gesture before audio can play.
+// We catch the earliest possible events — finger/mouse touching the screen —
+// so the music starts the moment the user makes any contact at all.
+function onFirstInteraction() {
+  if (musicState === 'off' && gameState === 'start') startMenuMusic();
+}
+['pointerdown','touchstart','mousedown','keydown'].forEach(ev =>
+  document.addEventListener(ev, onFirstInteraction, { once: true, passive: true, capture: true })
+);
+</script>
+</body>
+</html>
